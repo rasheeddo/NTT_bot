@@ -4,10 +4,10 @@ import socket
 import argparse
 import json
 import threading
-from SbusParser import SbusParser
+# from SbusParser import SbusParser
 
 
-############################### Arguments parser #############################################
+############################### Arguments parser ###############################
 
 parser = argparse.ArgumentParser(description='Run line follower')
 parser.add_argument('--slu',
@@ -22,28 +22,25 @@ if slu is None:
 
 ser = serial.Serial(slu, timeout=0)  
 
-###################################################################################
+################################## UDP Socket ##################################
+## Listening to console data receiver
+SLU_PORT = 6666
+slu_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+slu_sock.bind(("0.0.0.0", SLU_PORT))
+slu_sock.setblocking(0)
 
-################################## Create slider input socket ##################################
+## Listening on moab kopropo SBUS channel
+SLU_RC_PORT = 7777
+slu_rc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+slu_rc_sock.bind(("0.0.0.0", SLU_PORT))
+slu_rc_sock.setblocking(0)
 
-SLU_IN_PORT = 31338
-JETSON_IP = "192.168.8.26"
-slu_in_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-slu_in_sock.bind((JETSON_IP, SLU_MOAB_PORT))
-slu_in_sock.setblocking(0)
-
-###################################################################################
-
-################################## Create feedback publish socket ##################################
-
-SLU_FB_PORT = 31339
-JETSON_IP = "192.168.8.26"
-slu_out_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+## Publishing data to data publisher
+SLU_FB_PORT = 8888
+slu_fb_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 
-###################################################################################
-
-################################ Init #############################################
+################################## Parameters ###########################################
 
 channel_trim = 1020
 deadband_width = 20
@@ -55,28 +52,23 @@ loop_sleep_time = 0.05
 velocity_deadband = 100
 position_deadband = 100
 
-###################################################################################
-
+################################### Initializeation #####################################
 
 time.sleep(2)
-
 ser.write(initialize().encode())
-
 ser.write(set_drive_mode(1).encode())  # 0 means position control;  1 means velocity control
-
 ser.write(set_velocity_absolutely(0).encode())
-
 ser.write(set_acceleration_absolutely(acceleration).encode())
 
 
-propo_channels = SbusParser()
+#propo_channels = SbusParser() 
 
 first = True
 
-################################### Separate thread for feedback #################################
-
+####################################### Thread ########################################
 prev_time = time.time()
 latest_position = 0
+
 def read_from_serial_port(ser):
 	global latest_position
 
@@ -91,10 +83,10 @@ def read_from_serial_port(ser):
 			pass
 
 
-thread = threading.Thread(target=read_from_serial_port, args=(ser,))
+thread = threading.Thread(target=read_from_serial_port, args=(ser,), daemon=True)
 thread.start()
 
-####################################################################################################
+###################################### Loop ##########################################
 
 while True:
 	
@@ -107,14 +99,14 @@ while True:
 
 	try:
 		while True:
-			moab_pkt, addr = slu_moab_sock.recvfrom(1024, socket.MSG_DONTWAIT)
+			moab_pkt, addr = slu_rc_sock.recvfrom(1024, socket.MSG_DONTWAIT)
 			# pkt = data.decode()
 	except:
 		moab_pkt = moab_pkt
 
 	try:
 		while True:
-			webrtc_pkt, addr = slu_webrtc_sock.recvfrom(1024, socket.MSG_DONTWAIT)
+			webrtc_pkt, addr = slu_sock.recvfrom(1024, socket.MSG_DONTWAIT)
 			#print("got imu packet")
 	except:
 		webrtc_pkt = webrtc_pkt
