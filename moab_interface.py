@@ -6,6 +6,17 @@ import struct
 import time
 import pickle
 
+def map_with_limit(val, in_min, in_max, out_min, out_max):
+
+	out = (val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+	if out > out_max:
+		out = out_max
+	elif out < out_min:
+		out = out_min
+
+	return out
+
 
 def DriveWheels(sbus_throttle, sbus_steering):
 	## this is atdrive-moab on branch "XWheels-dev-SBUS_throttle_steering"
@@ -32,9 +43,13 @@ moab_console_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 moab_console_sock.bind(("0.0.0.0", MOAB_CONSOLE_PORT))
 moab_console_sock.setblocking(0)
 
+slu_rc_data = { "CAM_JOG" : 0.0 }
+
 ######################### Parameter ###########################
 sbus_mid = 1018
 sbus_inc = 300	# limit is 580
+sbus_max = 1598
+sbus_min = 438
 
 ######################### Loop ###########################
 STR_val = 0.0
@@ -43,6 +58,7 @@ got_data_time = time.time()
 got_sbus_time = time.time()
 sbus_throttle = sbus_mid
 sbus_steering = sbus_mid
+prev_cam_jog_percent = 0.0
 
 while True:
 
@@ -76,10 +92,30 @@ while True:
 			else:
 				# print(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8,ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16, failsafe, frame_lost)
 
-				## In auto mode
+				## In MOAB's auto mode
 				if (ch7 > 1050 and ch7 < 1100) and (ch8 > 1050 and ch8 < 1100):
-
+					## We let user control cart by gamepad via WebRTC
 					DriveWheels(sbus_throttle, sbus_steering)
+
+				## In MOAB's manual mode
+				elif (ch7 < 1050 and ch7 > 950 and ch8 < 1050 and ch8 > 950):
+					## We let user adjust the camera lifter from Kopropo right analog stick
+					cam_jog_percent = map_with_limit(ch3, sbus_min, sbus_max, -1.0, 1.0)
+
+					# filter out too low (-0.01 ~ 0.01) value
+					if (cam_jog_percent < 0.01) and (cam_jog_percent > -0.01):
+						cam_jog_percent = 0.0
+
+					slu_rc_data["CAM_JOG"] = cam_jog_percent
+
+					## we send only when data got changed
+					if cam_jog_percent != prev_cam_jog_percent:
+						slu_rc_packet = pickle.dumps(slu_rc_data)
+						slu_rc_sock.sendto(slu_rc_packet,("127.0.0.1",SLU_RC_PORT))
+
+					prev_cam_jog_percent = cam_jog_percent
+
+
 
 	###################################################
 	################# Get gamepad data ################
