@@ -21,10 +21,10 @@ if CONSOLE_PORT is None:
 
 ###################################SOCKET #############################################
 
-SLU_FB_PORT = 31339
+SLU_FB_PORT = 8888
 JETSON_IP = "192.168.8.26"
 slu_fb_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-slu_fb_sock.bind((JETSON_IP, SLU_FB_PORT))
+slu_fb_sock.bind(("0.0.0.0", SLU_FB_PORT))
 slu_fb_sock.setblocking(0)
 
 #################################### Loop #############################################
@@ -37,13 +37,14 @@ try:
 		#######################################
 		### Get feedback data from slu main ###
 		#######################################
-
+		feedback_pkt = None
 		try:
 			while True:
-				feedback_pkt, addr = slu_webrtc_sock.recvfrom(1024, socket.MSG_DONTWAIT)
+				feedback_pkt, addr = slu_fb_sock.recvfrom(1024, socket.MSG_DONTWAIT)
 				#print("got imu packet")
+
 		except:
-			feedback_pkt = webrtc_pkt
+			feedback_pkt = feedback_pkt
 
 		if feedback_pkt:
 			# Decode the input from momo
@@ -58,11 +59,12 @@ try:
 		## 0.05 -> 20  Hz
 		## 0.1  -> 10  Hz
 		## 0.5  -> 2   Hz
-		if webrtc_pkt and ((time.time() - prev_time) > 0.1):
+		if feedback_pkt and ((time.time() - prev_time) > 0.1):
+
 			print(feedback_pkt_dec)
 			with open("camera_pos.txt", "w+")as file:
 				file.write(feedback_pkt_dec)
-			cmd1 = 'echo $(camera_pos.txt) > {:s}'.format(CONSOLE_PORT)
+			cmd1 = 'echo $(cat camera_pos.txt) > {:s}'.format(CONSOLE_PORT)
 			subprocess.run(cmd1, shell=True, check=True)
 			prev_time = time.time()
 

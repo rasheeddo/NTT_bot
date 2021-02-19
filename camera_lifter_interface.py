@@ -4,6 +4,7 @@ import socket
 import argparse
 import json
 import threading
+import pickle
 # from SbusParser import SbusParser
 
 
@@ -32,7 +33,7 @@ slu_sock.setblocking(0)
 ## Listening on moab kopropo SBUS channel
 SLU_RC_PORT = 7777
 slu_rc_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-slu_rc_sock.bind(("0.0.0.0", SLU_PORT))
+slu_rc_sock.bind(("0.0.0.0", SLU_RC_PORT))
 slu_rc_sock.setblocking(0)
 
 ## Publishing data to data publisher
@@ -51,6 +52,7 @@ loop_sleep_time = 0.05
 
 velocity_deadband = 100
 position_deadband = 100
+slider_const = 50
 
 ################################### Initializeation #####################################
 
@@ -127,7 +129,7 @@ while True:
 
 			# move with right stick ch C
 
-			if  (ch3 < channel_trim-deadband_width) or (ch3 > channel_trim+deadband_width):
+			if (ch3 < channel_trim-deadband_width) or (ch3 > channel_trim+deadband_width):
 				print("move")
 				ser.write(set_velocity_absolutely((ch3-channel_trim) * speed_factor).encode())
 
@@ -135,25 +137,30 @@ while True:
 				print("stay")
 				ser.write(set_velocity_absolutely(0).encode())
 
+		except Exception as e:
+			print(e)
+
 		#######################################
 		# If bot mode is auto, run with webrtc
 		#######################################
 
 	elif webrtc_pkt:
 		# Decode the input from momo
-		webrtc_pkt_dec = webrtc_pkt.decode()
-		dec = json.loads(webrtc_pkt_dec)
+		dec = pickle.loads(webrtc_pkt)
+
 		print(dec)
 
 		# Assign velocity and position
 		position_in = dec['CAM_POS']                       ############## TO BE EDITED, if format is different
 		velocity_in = dec['CAM_VEL']
+		ch_right_y = dec['CAM_JOG']
 
 		try:
 			#####################
 			# If slider is moved
 			#####################
-			if  (abs(velocity_in - prev_velocity_in) > velocity_deadband) or (abs(position_in - prev_position_in) > position_deadband):
+
+			if (abs(position_in - prev_position_in) > position_deadband):
 
 				ser.write(set_drive_mode(0).encode())
 
@@ -161,7 +168,7 @@ while True:
 
 				print("move")
 				ser.write(set_velocity_absolutely(velocity_in).encode())
-				ser.write(set_position_absolutely(position_in).encode())
+				ser.write(set_position_absolutely(position_in * slider_const).encode())
 				ser.write(wait())
 
 				ser.write(set_drive_mode(1).encode())
@@ -170,9 +177,9 @@ while True:
 				# else if stick is moved
 				#########################
 			elif abs(ch_right_y) > 0.05:
-				
+				ser.write(set_drive_mode(1).encode())
 				print("move")
-				ser.write(set_velocity_absolutely((-ch_right_y) * speed_factor_webrtc).encode())
+				ser.write(set_velocity_absolutely((ch_right_y) * speed_factor_webrtc).encode())
 
 			else:
 				ser.write(set_velocity_absolutely(0).encode())
@@ -194,11 +201,11 @@ while True:
 	if ( (time.time() - prev_time) > loop_sleep_time):
 
 		# Make json
-		feedback_dict = { "pos": latest_position}
+		feedback_dict = { "pos": int(latest_position/slider_const)}
 		json_data = json.dumps(feedback_dict)
 
 		# Send with udp
-		slu_out_sock.sendto(json_data.encode(),(JETSON_IP,SLU_FB_PORT))
+		slu_fb_sock.sendto(json_data.encode(),("127.0.0.1",SLU_FB_PORT))
 
 		prev_time = time.time()
 
