@@ -156,6 +156,7 @@ while True:
 			if first:
 				prev_position_in = position_in
 				prev_velocity_in = velocity_in
+				first = False
 
 			#####################
 			# If slider is moved
@@ -169,7 +170,7 @@ while True:
 				print("move")
 				ser.write(set_velocity_absolutely(velocity_in).encode())
 				ser.write(set_position_absolutely(position_in * slider_const).encode())
-				ser.write(wait())
+				ser.write(wait().encode())
 
 				ser.write(set_drive_mode(1).encode())
 
