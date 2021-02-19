@@ -118,20 +118,16 @@ while True:
 	# If bot mode is manual, run with propo
 	########################################
 
-	if moab_pkt:  ################## TO BE EDITED, the condition of moab(auto/manual) mode should be added ################
+	if moab_pkt: 
 
-		propo_channels.parse_packet(moab_pkt)
-		print(propo_channels.__dict__)
-		ch3 = propo_channels.prev_ch3
-
+		moab_pkt_dict = pickle.loads(moab_pkt)
+		ch3 = moab_pkt_dict["CAM_JOG"]
 
 		try:
-
-			# move with right stick ch C
-
-			if (ch3 < channel_trim-deadband_width) or (ch3 > channel_trim+deadband_width):
+			if abs(ch3) > 0.05:
+				ser.write(set_drive_mode(1).encode())
 				print("move")
-				ser.write(set_velocity_absolutely((ch3-channel_trim) * speed_factor).encode())
+				ser.write(set_velocity_absolutely((ch3) * speed_factor_webrtc).encode())
 
 			else:
 				print("stay")
