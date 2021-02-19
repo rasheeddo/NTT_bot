@@ -21,7 +21,7 @@ if slu is None:
 	print("Error: please specify slu unit")
 	quit()
 
-ser = serial.Serial(slu, timeout=0)  
+ser = serial.Serial(slu)  
 
 ################################## UDP Socket ##################################
 ## Listening to console data receiver
@@ -75,14 +75,15 @@ def read_from_serial_port(ser):
 	global latest_position
 
 	while True:
-		serial_fb = ser.readline().decode()
-		# print(serial_fb)
+		serial_fb = ser.readline().decode().strip()
+
 		try:
 			if (len(serial_fb) > 0) and (int(serial_fb) != 0):
 				latest_position = int(serial_fb)
 				# print("serial_fb: " + str(serial_fb) + "          len: "+ str(len(serial_fb)))
-		except:
-			pass
+		except Exception as e:
+			print(e)
+
 
 
 thread = threading.Thread(target=read_from_serial_port, args=(ser,), daemon=True)
@@ -152,6 +153,10 @@ while True:
 		ch_right_y = dec['CAM_JOG']
 
 		try:
+			if first:
+				prev_position_in = position_in
+				prev_velocity_in = velocity_in
+
 			#####################
 			# If slider is moved
 			#####################
@@ -161,7 +166,6 @@ while True:
 				ser.write(set_drive_mode(0).encode())
 
 				# Set the velocity first and then move to position and wait for position control to complete
-
 				print("move")
 				ser.write(set_velocity_absolutely(velocity_in).encode())
 				ser.write(set_position_absolutely(position_in * slider_const).encode())
@@ -191,6 +195,7 @@ while True:
 
 	# Send command for position feedback
 	ser.write(get_position().encode())
+
 	print(latest_position)
 
 	# Send current position to data publisher
